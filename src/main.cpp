@@ -38,8 +38,8 @@ void init_pwm()
     TCCR1=(1<<PWM1A) | // PWM mode A
     (1<<COM1A1) |  //  OC1A out
     (1<<CS12) | (1<<CS11) | (1<<CS10); // clk/64
-    GTCCR=(1<<PWM1B) |  // PWM mode B
-    (1<<COM1B1); // OC1B out
+    //GTCCR=(1<<PWM1B) |  // PWM mode B
+    //(1<<COM1B1); // OC1B out
 }
 
 void set_pwm(uint8_t out0, uint8_t out1)
@@ -50,12 +50,14 @@ void set_pwm(uint8_t out0, uint8_t out1)
 
 void set_fan_speed(uint8_t speed)
 {
-    uint8_t voltage_drive = 128 + ((speed > 127) ? (speed-128) : 0);
+    //uint8_t voltage_drive = 128 + ((speed > 127) ? (speed-128) : 0);
+    uint8_t voltage_drive = 128 + speed/2;
     uint8_t output_drive = 127 + min(speed, 128);
-    bool enabled = speed > 0 || (uint8_t)(registers.config & FLAG_FAN_ENABLED);
+    bool enabled = speed > 0 && (uint8_t)(registers.config & FLAG_FAN_ENABLED);
     if(!enabled)
         output_drive = 0;
     set_pwm(voltage_drive, output_drive);
+    digitalWrite(PIN_NOT_EN, !enabled);
 }
 
 void on_i2c_write(uint8_t n)
