@@ -9,29 +9,9 @@ constexpr uint8_t PIN_NOT_EN = 4;
 constexpr uint8_t PIN_LED = 3;
 
 constexpr uint8_t I2C_ADDRESS = 0x42;
-constexpr uint8_t REGISTERS_N = 2;
-constexpr uint8_t NULL_REGISTER = 255;
 
-constexpr uint8_t FLAG_FAN_ENABLED = (1 << 0);
-constexpr uint8_t FLAG_TEST = (1 << 1);
-
-
-
-volatile uint8_t selected = NULL_REGISTER;
-struct 
-{
-    union
-    {
-        uint8_t data[REGISTERS_N];
-        struct
-        {
-            uint8_t speed = 127;
-            uint8_t config = FLAG_FAN_ENABLED;
-        };
-    };
-}registers;
-
-static_assert(sizeof(registers) == REGISTERS_N);
+volatile uint8_t readn = 0;
+volatile uint8_t speed = 127;
 
 void init_pwm()
 {
@@ -53,7 +33,7 @@ void set_fan_speed(uint8_t speed)
     //uint8_t voltage_drive = 128 + ((speed > 127) ? (speed-128) : 0);
     uint8_t voltage_drive = 128 + speed/2;
     uint8_t output_drive = 127 + min(speed, 128);
-    bool enabled = speed > 0 && (uint8_t)(registers.config & FLAG_FAN_ENABLED);
+    bool enabled = speed > 0;
     if(!enabled)
         output_drive = 0;
     set_pwm(voltage_drive, output_drive);
@@ -64,26 +44,18 @@ void on_i2c_write(uint8_t n)
 {
     while(TinyWireS.available())
     {
-        uint8_t v = TinyWireS.receive();
-        if(selected == NULL_REGISTER)
-        {
-            selected = v;
-            return;
-        }
-        if(selected < REGISTERS_N)
-            registers.data[selected] = v;
-        selected = NULL_REGISTER;
+        speed = TinyWireS.receive();
     }
 }
 void on_i2c_read()
 {
-    if(selected != NULL_REGISTER)
-    {
-        TinyWireS.send(registers.data[selected]);
-        selected = NULL_REGISTER;
-    }
-    else
+    readn = (readn+1) % 3;
+    if(readn == 0)
         TinyWireS.send(0x42);
+    else if(readn == 1)
+        TinyWireS.send(0xFE);
+    else if(readn == 2)
+        TinyWireS.send(speed);
 }
 
 void setup() 
@@ -101,26 +73,9 @@ void setup()
     set_fan_speed(0);
     while(true)
     {
-        if((registers.config & FLAG_TEST))
-        {
-            for(uint8_t i = 0; i < 255; i++)
-            {
-                if(!(registers.config & FLAG_TEST))
-                    break;
-                set_fan_speed(i);
-                digitalWrite(PIN_LED, !!(i % 2));
-                delay(100);
-            }
-            set_fan_speed(0);
-            digitalWrite(PIN_LED, 1);
-            delay(1000);
-        }
-        else
-        {
-            set_fan_speed(registers.speed);
-            digitalWrite(PIN_LED, b=!b);
-            delay(100);
-        }
+        set_fan_speed(speed);
+        digitalWrite(PIN_LED, b=!b);
+        delay(100);
         TinyWireS_stop_check();
     }
 }
